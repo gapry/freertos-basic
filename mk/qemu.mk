@@ -1,4 +1,4 @@
-QEMU_STM32 ?= ../qemu_stm32/arm-softmmu/qemu-system-arm
+QEMU_STM32 ?= /home/gapry/.bin/qemu_stm32/arm-softmmu/qemu-system-arm
 BUILD_TARGET = $(OUTDIR)/$(TARGET)
 export SHELL := /bin/bash
 
