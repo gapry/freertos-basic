@@ -214,7 +214,7 @@ int main()
 		(signed portCHAR *) "Task 2", 
 		128, 
 		(void* )pcTask2OutputString, 
-		tskIDLE_PRIORITY + 2, 
+		tskIDLE_PRIORITY + 3, 
 		NULL
 	);
 
