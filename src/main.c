@@ -161,16 +161,22 @@ void vPrintString (const char* output_string)
 void vTaskFunction (void* pvParameters)
 {
 	char* pcTaskName;
-	volatile unsigned long ul;
 
 	pcTaskName = (char *) pvParameters;
 
 	for (;;) {
 		vPrintString (pcTaskName);
-
-		for (ul = 0; ul < mainDELAY_LOOP_COUNT; ++ul) {
-
-		}
+	
+		/* 
+		 * Note of Gapry:
+		 * 
+		 * The vTaskDelay() API function is the blocking API. 
+		 * Assume FreeRTOS adopt priority scheduling. 
+		 * Each task of priority only affect each time of exection as the event appears.
+		 * Event driven is so powerful manner.
+		 * it can aviod the task of starving state and more effect than polling.
+		 */
+		vTaskDelay (250 / portTICK_RATE_MS);
 	}
 }
 
