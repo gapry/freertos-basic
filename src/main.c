@@ -158,10 +158,12 @@ void vPrintString (const char* output_string)
 	xTaskResumeAll ();	
 }
 
-void vTask1 (void* pvParameters)
+void vTaskFunction (void* pvParameters)
 {
-	const char* pcTaskName = "Task 1 is running\n\r";
+	char* pcTaskName;
 	volatile unsigned long ul;
+
+	pcTaskName = (char *) pvParameters;
 
 	for (;;) {
 		vPrintString (pcTaskName);
@@ -172,19 +174,8 @@ void vTask1 (void* pvParameters)
 	}
 }
 
-void vTask2 (void* pvParameters)
-{
-	const char* pcTaskName = "Task 2 is running\n\r";
-	volatile unsigned long ul;
-
-	for (;;) {
-		vPrintString (pcTaskName);
-
-		for (ul = 0; ul < mainDELAY_LOOP_COUNT; ++ul) {
-			
-		}
-	}
-}
+static const char* pcTask1OutputString = "Task1 is running\n\r";
+static const char* pcTask2OutputString = "Task2 is running\n\r";
 
 int main()
 {
@@ -209,8 +200,23 @@ int main()
 
     register_devfs();
 
-	xTaskCreate (vTask1, (signed portCHAR *) "Task 1", 128, NULL, tskIDLE_PRIORITY + 2, NULL);
-	xTaskCreate (vTask2, (signed portCHAR *) "Task 2", 128, NULL, tskIDLE_PRIORITY + 2, NULL);
+	xTaskCreate (
+		vTaskFunction, 
+		(signed portCHAR *) "Task 1", 
+		128, 
+		(void* )pcTask1OutputString, 
+		tskIDLE_PRIORITY + 2, 
+		NULL
+	);
+
+	xTaskCreate (
+		vTaskFunction, 
+		(signed portCHAR *) "Task 2", 
+		128, 
+		(void* )pcTask2OutputString, 
+		tskIDLE_PRIORITY + 2, 
+		NULL
+	);
 
 #if 0
 	/* Create a task to record system log. */
