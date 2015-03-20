@@ -17,6 +17,8 @@
 #include "shell.h"
 #include "host.h"
 
+#define mainDELAY_LOOP_COUNT (0xfffff)
+
 /* _sromfs symbol can be found in main.ld linker script
  * it contains file system structure of test_romfs directory
  */
@@ -147,8 +149,48 @@ void system_logger(void *pvParameters)
     host_action(SYS_CLOSE, handle);
 }
 
+void vPrintString (const char* output_string)
+{
+	vTaskSuspendAll ();
+	{
+		fio_printf (1, output_string, sizeof (output_string));
+	}		
+	xTaskResumeAll ();	
+}
+
+void vTask1 (void* pvParameters)
+{
+	const char* pcTaskName = "Task 1 is running\n\r";
+	volatile unsigned long ul;
+
+	for (;;) {
+		vPrintString (pcTaskName);
+
+		for (ul = 0; ul < mainDELAY_LOOP_COUNT; ++ul) {
+
+		}
+	}
+}
+
+void vTask2 (void* pvParameters)
+{
+	const char* pcTaskName = "Task 2 is running\n\r";
+	volatile unsigned long ul;
+
+	for (;;) {
+		vPrintString (pcTaskName);
+
+		for (ul = 0; ul < mainDELAY_LOOP_COUNT; ++ul) {
+			
+		}
+	}
+}
+
 int main()
 {
+	/*
+	 * The following routines must be called.
+	 */
 	init_rs232();
 	enable_rs232_interrupts();
 	enable_rs232();
@@ -166,10 +208,9 @@ int main()
 	serial_rx_queue = xQueueCreate(1, sizeof(char));
 
     register_devfs();
-	/* Create a task to output text read from romfs. */
-	xTaskCreate(command_prompt,
-	            (signed portCHAR *) "CLI",
-	            512 /* stack size */, NULL, tskIDLE_PRIORITY + 2, NULL);
+
+	xTaskCreate (vTask1, (signed portCHAR *) "Task 1", 128, NULL, tskIDLE_PRIORITY + 2, NULL);
+	xTaskCreate (vTask2, (signed portCHAR *) "Task 2", 128, NULL, tskIDLE_PRIORITY + 2, NULL);
 
 #if 0
 	/* Create a task to record system log. */
