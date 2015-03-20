@@ -158,14 +158,17 @@ void vPrintString (const char* output_string)
 	xTaskResumeAll ();	
 }
 
+struct tplist {
+	const char* outputstring;
+	int ms; 
+};
+
 void vTaskFunction (void* pvParameters)
 {
-	char* pcTaskName;
-
-	pcTaskName = (char *) pvParameters;
+	struct tplist* foo = (struct tplist*) pvParameters;
 
 	for (;;) {
-		vPrintString (pcTaskName);
+		vPrintString (foo->outputstring);
 	
 		/* 
 		 * Note of Gapry:
@@ -176,12 +179,38 @@ void vTaskFunction (void* pvParameters)
 		 * Event driven is so powerful manner.
 		 * it can aviod the task of starving state and more effect than polling.
 		 */
-		vTaskDelay (250 / portTICK_RATE_MS);
+		vTaskDelay (foo->ms);
 	}
 }
 
 static const char* pcTask1OutputString = "Task1 is running\n\r";
 static const char* pcTask2OutputString = "Task2 is running\n\r";
+
+static const int tick_1 = 150;
+static const int tick_2 = 1500;
+
+/*
+ * Note of Gapry: https://gcc.gnu.org/onlinedocs/gcc/Compound-Literals.html 
+ */
+
+static struct tplist* tp_1 = &(struct tplist) {
+	.outputstring = "\n\r",
+	.ms = 0
+};
+
+static struct tplist* tp_2 = &(struct tplist) {
+	.outputstring = "test\n\r",
+	.ms = 0
+};
+
+void init_task_para_list ()
+{
+	tp_1->outputstring = pcTask1OutputString;
+	tp_1->ms = tick_1 / portTICK_RATE_MS;
+
+	tp_2->outputstring = pcTask2OutputString;
+	tp_2->ms = tick_2 / portTICK_RATE_MS;
+}
 
 int main()
 {
@@ -206,11 +235,13 @@ int main()
 
     register_devfs();
 
+	init_task_para_list ();	
+
 	xTaskCreate (
 		vTaskFunction, 
 		(signed portCHAR *) "Task 1", 
 		128, 
-		(void* )pcTask1OutputString, 
+		(void* )tp_1,
 		tskIDLE_PRIORITY + 2, 
 		NULL
 	);
@@ -219,7 +250,7 @@ int main()
 		vTaskFunction, 
 		(signed portCHAR *) "Task 2", 
 		128, 
-		(void* )pcTask2OutputString, 
+		(void* )tp_2, 
 		tskIDLE_PRIORITY + 3, 
 		NULL
 	);
