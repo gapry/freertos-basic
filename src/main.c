@@ -156,23 +156,23 @@ void vPrintString(const char* msg)
 	xTaskResumeAll();
 }
 
+static const portTickType xDelay1000ms = 1000 / portTICK_RATE_MS;
+
+xTaskHandle xTask1Handle;
 xTaskHandle xTask2Handle;
 
 void vTask2(void* pvParameters)
 {
-	vPrintString("Task2 is running and about to delete itself\n\r");
+	vPrintString(".................Task2 is running\n\r");
+	vPrintString(".................Task2 delete\n\r");
 	vTaskDelete(xTask2Handle);
 }
 
 void vTask1(void* pvParameters)
 {
-	const portTickType xDelay100ms = 250 / portTICK_RATE_MS;
-
-	while(1) {
-		vPrintString("Task1 is running\n\r");
-		xTaskCreate(vTask2, (signed portCHAR*) "Task 2", 128, NULL, 2, &xTask2Handle);
-		vTaskDelay(xDelay100ms);
-	}
+	vPrintString("Task1 is running\n\r");
+	vPrintString("Task1 delete\n\r");
+	vTaskDelete(xTask1Handle);
 }
 
 int main()
@@ -197,6 +197,7 @@ int main()
 	/* Create a task to output text read from romfs. */
 
 	xTaskCreate(vTask1, (signed portCHAR*) "Task 1", 128, NULL, 1, NULL);
+	xTaskCreate(vTask2, (signed portCHAR*) "Task 2", 128, NULL, 2, NULL);
 
 	/* Start running the tasks. */
 	vTaskStartScheduler();
@@ -206,4 +207,6 @@ int main()
 
 void vApplicationTickHook()
 {
+	xTaskCreate(vTask1, (signed portCHAR*) "Task 1", 128, NULL, 1, &xTask1Handle);
+	xTaskCreate(vTask2, (signed portCHAR*) "Task 2", 128, NULL, 2, &xTask2Handle);
 }
