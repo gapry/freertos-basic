@@ -147,6 +147,7 @@ void system_logger(void *pvParameters)
     host_action(SYS_CLOSE, handle);
 }
 
+xTaskHandle xTask1Handle;
 xTaskHandle xTask2Handle;
 
 void vPrintString (const char* msg)
@@ -160,24 +161,28 @@ void vPrintString (const char* msg)
 
 void vTask1(void* pvParameters)
 {
-	unsigned portBASE_TYPE uxPriority = uxTaskPriorityGet(NULL);
+	unsigned portBASE_TYPE uxPriority_t1 = uxTaskPriorityGet(xTask1Handle);
+	unsigned portBASE_TYPE uxPriority_t2 = uxTaskPriorityGet(xTask2Handle);
 
 	while(1) {
 		vPrintString ("Task1 is running...............................................\n\r");
-		vPrintString ("About to raise the Task2 priority\n\r");
-		vTaskPrioritySet (xTask2Handle, (uxPriority + 1));
+		/* 
+		 * Q: Does it need to lock?
+		 */
+		vTaskPrioritySet (xTask2Handle, uxPriority_t1);
+		vTaskPrioritySet (xTask1Handle, uxPriority_t2);
 	}
 }
 
 void vTask2(void* pvParameters)
 {
-	unsigned portBASE_TYPE uxPriority = uxTaskPriorityGet(NULL);
+	unsigned portBASE_TYPE uxPriority_t1 = uxTaskPriorityGet(xTask1Handle);
+	unsigned portBASE_TYPE uxPriority_t2 = uxTaskPriorityGet(xTask2Handle);
 
 	while(1) {
 		vPrintString ("................................................Task2 is running\n\r");
-		vPrintString ("About to lower the Task2 priority\n\r");
-
-		vTaskPrioritySet (NULL, (uxPriority - 2));
+		vTaskPrioritySet (xTask1Handle, uxPriority_t2);
+		vTaskPrioritySet (xTask2Handle, uxPriority_t1);
 	}
 }
 
@@ -202,7 +207,7 @@ int main()
     register_devfs();
 	/* Create a task to output text read from romfs. */
 
-	xTaskCreate (vTask1, (signed portCHAR *)"Task 1", 128, NULL, tskIDLE_PRIORITY + 2, NULL);
+	xTaskCreate (vTask1, (signed portCHAR *)"Task 1", 128, NULL, tskIDLE_PRIORITY + 2, &xTask1Handle);
 	xTaskCreate (vTask2, (signed portCHAR *)"Task 2", 128, NULL, tskIDLE_PRIORITY + 1, &xTask2Handle);
 
 	vTaskStartScheduler();
