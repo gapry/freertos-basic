@@ -147,6 +147,40 @@ void system_logger(void *pvParameters)
     host_action(SYS_CLOSE, handle);
 }
 
+xTaskHandle xTask2Handle;
+
+void vPrintString (const char* msg)
+{
+	vTaskSuspendAll();
+	{
+		fio_printf(1, msg, sizeof(msg));
+	}
+	xTaskResumeAll();
+}
+
+void vTask1(void* pvParameters)
+{
+	unsigned portBASE_TYPE uxPriority = uxTaskPriorityGet(NULL);
+
+	while(1) {
+		vPrintString ("Task1 is running...............................................\n\r");
+		vPrintString ("About to raise the Task2 priority\n\r");
+		vTaskPrioritySet (xTask2Handle, (uxPriority + 1));
+	}
+}
+
+void vTask2(void* pvParameters)
+{
+	unsigned portBASE_TYPE uxPriority = uxTaskPriorityGet(NULL);
+
+	while(1) {
+		vPrintString ("................................................Task2 is running\n\r");
+		vPrintString ("About to lower the Task2 priority\n\r");
+
+		vTaskPrioritySet (NULL, (uxPriority - 2));
+	}
+}
+
 int main()
 {
 	init_rs232();
@@ -167,19 +201,14 @@ int main()
 
     register_devfs();
 	/* Create a task to output text read from romfs. */
-	xTaskCreate(command_prompt,
-	            (signed portCHAR *) "CLI",
-	            512 /* stack size */, NULL, tskIDLE_PRIORITY + 2, NULL);
 
-#if 0
-	/* Create a task to record system log. */
-	xTaskCreate(system_logger,
-	            (signed portCHAR *) "Logger",
-	            1024 /* stack size */, NULL, tskIDLE_PRIORITY + 1, NULL);
-#endif
+	xTaskCreate (vTask1, (signed portCHAR *)"Task 1", 128, NULL, tskIDLE_PRIORITY + 2, NULL);
+	xTaskCreate (vTask2, (signed portCHAR *)"Task 2", 128, NULL, tskIDLE_PRIORITY + 1, &xTask2Handle);
 
-	/* Start running the tasks. */
 	vTaskStartScheduler();
+
+	while(1) {
+	}
 
 	return 0;
 }
