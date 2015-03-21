@@ -147,6 +147,34 @@ void system_logger(void *pvParameters)
     host_action(SYS_CLOSE, handle);
 }
 
+void vPrintString(const char* msg)
+{
+	vTaskSuspendAll();
+	{
+		fio_printf(1, msg, sizeof(msg));
+	}
+	xTaskResumeAll();
+}
+
+xTaskHandle xTask2Handle;
+
+void vTask2(void* pvParameters)
+{
+	vPrintString("Task2 is running and about to delete itself\n\r");
+	vTaskDelete(xTask2Handle);
+}
+
+void vTask1(void* pvParameters)
+{
+	const portTickType xDelay100ms = 250 / portTICK_RATE_MS;
+
+	while(1) {
+		vPrintString("Task1 is running\n\r");
+		xTaskCreate(vTask2, (signed portCHAR*) "Task 2", 128, NULL, 2, &xTask2Handle);
+		vTaskDelay(xDelay100ms);
+	}
+}
+
 int main()
 {
 	init_rs232();
@@ -167,16 +195,8 @@ int main()
 
     register_devfs();
 	/* Create a task to output text read from romfs. */
-	xTaskCreate(command_prompt,
-	            (signed portCHAR *) "CLI",
-	            512 /* stack size */, NULL, tskIDLE_PRIORITY + 2, NULL);
 
-#if 0
-	/* Create a task to record system log. */
-	xTaskCreate(system_logger,
-	            (signed portCHAR *) "Logger",
-	            1024 /* stack size */, NULL, tskIDLE_PRIORITY + 1, NULL);
-#endif
+	xTaskCreate(vTask1, (signed portCHAR*) "Task 1", 128, NULL, 1, NULL);
 
 	/* Start running the tasks. */
 	vTaskStartScheduler();
