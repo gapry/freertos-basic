@@ -147,6 +147,76 @@ void system_logger(void *pvParameters)
     host_action(SYS_CLOSE, handle);
 }
 
+struct tplist {
+	const char* msg;
+	int ms;
+};
+
+void vPrintString(const char* pcString)
+{
+	vTaskSuspendAll();
+	{
+		fio_printf(1, pcString, sizeof(pcString));
+	}
+	xTaskResumeAll();
+}
+
+void vContinuousProcessingTask(void* pvParameters)
+{
+	struct tplist* params = (struct tplist*) pvParameters;
+	
+	while (1) {
+		vPrintString (params->msg);
+	}
+}
+
+void vPeriodicTask(void* pvParameters)
+{
+	struct tplist* params = (struct tplist*) pvParameters;
+
+	portTickType xLastWakeTime = xTaskGetTickCount();
+
+	while (1) {
+		vPrintString(params->msg);
+
+		vTaskDelayUntil(&xLastWakeTime, params->ms);
+	}
+	
+}
+
+static const char* msg_task_1 = "Continuous task 1 running\n\r";
+static const char* msg_task_2 = "Continuous task 2 running\n\r";
+static const char* msg_task_3 = "Periodic task is running..........................\n\r";
+
+/*
+ * Q1: Is the converting as following must be integer?
+ */
+
+static const int task3_ms = 250 / portTICK_RATE_MS;
+
+static struct tplist* tp_1 = &(struct tplist) {
+	.msg = "\n\r",
+	.ms = 0
+};
+
+static struct tplist* tp_2 = &(struct tplist) {
+	.msg = "\n\r",
+	.ms = 0
+};
+
+static struct tplist* tp_3 = &(struct tplist) {
+	.msg = "\n\r",
+	.ms = 0
+};
+
+void init_task_struct()
+{
+	tp_1->msg = msg_task_1;
+	tp_2->msg = msg_task_2;
+	tp_3->msg = msg_task_3;
+	tp_3->ms = task3_ms; 
+}
+
 int main()
 {
 	init_rs232();
@@ -167,19 +237,24 @@ int main()
 
     register_devfs();
 	/* Create a task to output text read from romfs. */
-	xTaskCreate(command_prompt,
-	            (signed portCHAR *) "CLI",
-	            512 /* stack size */, NULL, tskIDLE_PRIORITY + 2, NULL);
 
-#if 0
-	/* Create a task to record system log. */
-	xTaskCreate(system_logger,
-	            (signed portCHAR *) "Logger",
-	            1024 /* stack size */, NULL, tskIDLE_PRIORITY + 1, NULL);
-#endif
+	init_task_struct();
+
+	xTaskCreate(vContinuousProcessingTask,
+	            (signed portCHAR *) "Task 1",
+	            128, tp_1, tskIDLE_PRIORITY + 2, NULL);
+	xTaskCreate(vContinuousProcessingTask,
+				(signed portCHAR *) "Task 2",
+				128, tp_2, tskIDLE_PRIORITY + 2, NULL);
+	xTaskCreate(vPeriodicTask,
+				(signed portCHAR *) "Task 3",
+				128, tp_3, tskIDLE_PRIORITY + 3, NULL);
 
 	/* Start running the tasks. */
 	vTaskStartScheduler();
+
+	while (1) {
+	}
 
 	return 0;
 }
