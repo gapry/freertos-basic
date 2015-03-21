@@ -147,6 +147,55 @@ void system_logger(void *pvParameters)
     host_action(SYS_CLOSE, handle);
 }
 
+struct tplist {
+	const char* msg;
+	int ms;
+};
+
+static unsigned long ulIdleCycleCount = 0UL;
+static const char* msg_1 = "Task 1 running\n\r";
+static const char* msg_2 = "Task 2 running\n\r";
+static int time_slice = 250 / portTICK_RATE_MS;
+
+struct tplist* tp_1 = &(struct tplist) {
+	.msg = "\n\r",
+	.ms = 0
+};
+
+struct tplist* tp_2 = &(struct tplist) {
+	.msg = "\n\r",
+	.ms = 0
+};
+
+void init_task_struct (void)
+{
+	tp_1->msg = msg_1;
+	tp_2->msg = msg_2;
+
+	tp_1->ms = tp_2->ms = time_slice;
+}
+
+void vPrintf (const char* msg, int cnt)
+{
+	vTaskSuspendAll ();
+	{
+    	fio_printf(1, msg, sizeof(msg));
+    	fio_printf(1, "%d\n\r", cnt);
+	}
+	xTaskResumeAll ();
+}
+
+void vTaskFunction(void* pvParameters)
+{
+	struct tplist* params = (struct tplist*) pvParameters;
+
+	while (1) {
+		vPrintf (params->msg, ulIdleCycleCount);
+
+		vTaskDelay (params->ms);
+	}
+}
+
 int main()
 {
 	init_rs232();
@@ -167,23 +216,25 @@ int main()
 
     register_devfs();
 	/* Create a task to output text read from romfs. */
-	xTaskCreate(command_prompt,
-	            (signed portCHAR *) "CLI",
-	            512 /* stack size */, NULL, tskIDLE_PRIORITY + 2, NULL);
+	xTaskCreate(vTaskFunction,
+	            (signed portCHAR *) "Task 1",
+	            128, tp_1, tskIDLE_PRIORITY + 2, NULL);
 
-#if 0
-	/* Create a task to record system log. */
-	xTaskCreate(system_logger,
-	            (signed portCHAR *) "Logger",
-	            1024 /* stack size */, NULL, tskIDLE_PRIORITY + 1, NULL);
-#endif
+	xTaskCreate(vTaskFunction,
+				(signed portCHAR *) "Task 2",
+				128, tp_2, tskIDLE_PRIORITY + 2, NULL);
 
+	init_task_struct();
 	/* Start running the tasks. */
 	vTaskStartScheduler();
+		
+	while(1) {
+	}
 
 	return 0;
 }
 
-void vApplicationTickHook()
+void vApplicationTickHook(void)
 {
+	++ulIdleCycleCount;
 }
