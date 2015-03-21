@@ -166,20 +166,22 @@ struct tplist {
 void vTaskFunction (void* pvParameters)
 {
 	struct tplist* foo = (struct tplist*) pvParameters;
+	portTickType xLastWakeTime = xTaskGetTickCount ();
 
 	for (;;) {
 		vPrintString (foo->outputstring);
-	
-		/* 
+
+		/*
 		 * Note of Gapry:
 		 * 
-		 * The vTaskDelay() API function is the blocking API. 
-		 * Assume FreeRTOS adopt priority scheduling. 
-		 * Each task of priority only affect each time of exection as the event appears.
-		 * Event driven is so powerful manner.
-		 * it can aviod the task of starving state and more effect than polling.
+		 * Make a branchmark to compare xTaskDelay and xTaskDelayUntil later.
+		 * 
+		 * Q1: Why does it need the xLastWakeTime ?
+		 * Q2: Can the xTaskDelayUntil() API absolute replace the xTaskDelay() API?
+		 * 	   That is, is the xTaskDelay() API not necessary?
+		 * Q3: Can the xTaskDelayUntil() API guarantee the hard real-time or soft real-time?
 		 */
-		vTaskDelay (foo->ms);
+		vTaskDelayUntil (&xLastWakeTime, foo->ms);
 	}
 }
 
@@ -191,6 +193,9 @@ static const int tick_2 = 1500;
 
 /*
  * Note of Gapry: https://gcc.gnu.org/onlinedocs/gcc/Compound-Literals.html 
+ *
+ * Q1: Why is the compound-literals necessary?
+ * Q2: How do I explain it through a detail experiment in deeply?
  */
 
 static struct tplist* tp_1 = &(struct tplist) {
