@@ -147,6 +147,65 @@ void system_logger(void *pvParameters)
     host_action(SYS_CLOSE, handle);
 }
 
+xQueueHandle xQueue;
+
+void vPrintString (const char* msg) {
+	vTaskSuspendAll();
+	{
+		fio_printf(1, msg, sizeof(msg));
+	}
+	xTaskResumeAll();
+}
+
+void vPrintStringAndNumber(const char* msg, long num)
+{
+	vTaskSuspendAll();
+	{
+		fio_printf(1, msg, sizeof(msg));
+		fio_printf(1, "%d\n\r", num);
+	}
+	xTaskResumeAll();
+}
+
+static void vSenderTask(void* pvParameters)
+{
+	long lValueToSend;
+	portBASE_TYPE xStatus;
+
+	lValueToSend = (long) pvParameters;
+
+	while(1) {
+		xStatus = xQueueSendToFront(xQueue, &lValueToSend, 0);
+
+		if(xStatus != pdPASS) {
+			vPrintString ("Could not send to the queue.\n\r");
+		}
+
+		taskYIELD();
+	}
+}
+
+static void vReceiverTask(void* pvParameters)
+{
+	long lReceivedValue;
+	portBASE_TYPE xStatus;
+	const portTickType xTicksToWait = 100 / portTICK_RATE_MS;
+
+	while(1) {
+		if (uxQueueMessagesWaiting(xQueue) != 0) {
+			vPrintString ("Queue should have been empty!\n");
+		}
+
+		xStatus = xQueueReceive(xQueue, &lReceivedValue, xTicksToWait);
+
+		if (xStatus == pdPASS) {
+			vPrintStringAndNumber("Received = ", lReceivedValue);
+		} else {
+			vPrintString("Could not receive from the queue.\n\r");
+		}
+	}
+}
+
 int main()
 {
 	init_rs232();
@@ -167,19 +226,21 @@ int main()
 
     register_devfs();
 	/* Create a task to output text read from romfs. */
-	xTaskCreate(command_prompt,
-	            (signed portCHAR *) "CLI",
-	            512 /* stack size */, NULL, tskIDLE_PRIORITY + 2, NULL);
 
-#if 0
-	/* Create a task to record system log. */
-	xTaskCreate(system_logger,
-	            (signed portCHAR *) "Logger",
-	            1024 /* stack size */, NULL, tskIDLE_PRIORITY + 1, NULL);
-#endif
+	xQueue = xQueueCreate(5, sizeof(long));
 
-	/* Start running the tasks. */
-	vTaskStartScheduler();
+	if(xQueue != NULL) {
+		xTaskCreate(vSenderTask, (signed portCHAR*)"Sender 1", 128, (void*)100, 1, NULL);
+		xTaskCreate(vSenderTask, (signed portCHAR*)"Sender 2", 128, (void*)200, 1, NULL);
+	
+		xTaskCreate(vReceiverTask, (signed portCHAR*)"Receiver", 128, NULL, 2, NULL);
+		/* Start running the tasks. */
+		vTaskStartScheduler();
+	} else {
+	}
+
+	while(1) {
+	}
 
 	return 0;
 }
