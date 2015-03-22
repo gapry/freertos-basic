@@ -147,6 +147,82 @@ void system_logger(void *pvParameters)
     host_action(SYS_CLOSE, handle);
 }
 
+#define mainSENDER_1 1
+#define mainSENDER_2 2
+
+xQueueHandle xQueue;
+
+typedef struct
+{
+	unsigned char ucValue;
+	unsigned char ucSource;
+} xData;
+
+static const xData xStructsToSend[2] = 
+{
+	{100, mainSENDER_1},
+	{200, mainSENDER_2}	
+};
+
+void vPrintString(const char* msg)
+{
+	//vTaskSupendAll();
+	{
+		fio_printf(1, msg, sizeof(msg));
+	}
+	//xTaskResumeAll();
+}
+
+void vPrintStringAndNumber(const char* msg, int num)
+{
+	//vTaskSupendAll();
+	{
+		fio_printf(1, msg, sizeof(msg));
+		fio_printf(1, "%d\n\r", num);
+	}	
+	//xTaskResumeAll();
+}
+
+static void vSenderTask(void* pvParameters)
+{
+	portBASE_TYPE xStatus;
+	const portTickType xTicksToWait = 100 / portTICK_RATE_MS;
+
+	while(1) {
+		xStatus = xQueueSendToBack(xQueue, pvParameters, xTicksToWait);
+
+		if(xStatus != pdPASS) {
+			vPrintString("Could not send to the queue.\n");
+		}
+
+		taskYIELD();
+	}
+}
+
+static void vReceiverTask(void* pvParameters)
+{
+	xData xReceivedStructure;
+	portBASE_TYPE xStatus;
+
+	while(1) {
+		if(uxQueueMessagesWaiting(xQueue) != 3) {
+			vPrintString("Queue should have been full!\n\r");
+		}
+
+		xStatus = xQueueReceive(xQueue, &xReceivedStructure, 0);
+
+		if(xStatus == pdPASS) {
+			if (xReceivedStructure.ucSource == mainSENDER_1) {
+				vPrintStringAndNumber("From Sender 1 = ", xReceivedStructure.ucValue);
+			} else {
+				vPrintStringAndNumber("From Sender 2 = ", xReceivedStructure.ucValue);
+			}
+		} else {
+			vPrintString("Could not receive from the queue.\n\r");
+		}
+	}
+}
+
 int main()
 {
 	init_rs232();
@@ -167,20 +243,25 @@ int main()
 
     register_devfs();
 	/* Create a task to output text read from romfs. */
-	xTaskCreate(command_prompt,
-	            (signed portCHAR *) "CLI",
-	            512 /* stack size */, NULL, tskIDLE_PRIORITY + 2, NULL);
 
-#if 0
-	/* Create a task to record system log. */
-	xTaskCreate(system_logger,
-	            (signed portCHAR *) "Logger",
-	            1024 /* stack size */, NULL, tskIDLE_PRIORITY + 1, NULL);
-#endif
+	xQueue = xQueueCreate(3, sizeof(xData));
 
-	/* Start running the tasks. */
-	vTaskStartScheduler();
+	if(xQueue != NULL) {
+		xTaskCreate(vSenderTask, (signed portCHAR*) "Sender1", 
+					128, (void*)&(xStructsToSend[0]),tskIDLE_PRIORITY+2, NULL);
 
+		xTaskCreate(vSenderTask, (signed portCHAR*) "Sender2", 
+					128, (void*)&(xStructsToSend[1]), tskIDLE_PRIORITY+2, NULL);
+
+		xTaskCreate(vReceiverTask, (signed portCHAR*) "Receiver", 
+					128, NULL, tskIDLE_PRIORITY+1, NULL);
+		/* Start running the tasks. */
+		vTaskStartScheduler();
+	} else {
+	}
+
+	while(1) {
+	}
 	return 0;
 }
 
