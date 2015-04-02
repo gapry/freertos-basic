@@ -15,7 +15,12 @@ SECTIONS
  		*(.text.*)
 		*(.rodata)
 		_sromfs = .;
-                *(.rom*)
+		/*	
+		 * the name of prefix section is defined in mk/romfs.mk
+         * 
+         * the correctness can verify via readelf -S main.elf or readelf -x .romfs.data main.elf
+		 */
+        *(.romfs*)
 		_eromfs = .;
 		_sidata = .;
 	} >FLASH
