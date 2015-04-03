@@ -28,6 +28,19 @@ volatile xSemaphoreHandle serial_tx_wait_sem = NULL;
 /* Add for serial input */
 volatile xQueueHandle serial_rx_queue = NULL;
 
+typedef struct{
+	char* username;
+	char* passwd;
+} xAuthPkg;
+
+xQueueHandle xQueue;
+xQueueHandle xAuthQueue;
+
+xTaskHandle login_handle;
+xTaskHandle auth_client_handle;
+xTaskHandle auth_service_handle;
+xTaskHandle cmd_handle;
+
 /* IRQ handler to handle USART2 interruptss (both transmit and receive
  * interrupts). */
 void USART2_IRQHandler()
@@ -85,15 +98,16 @@ char recv_byte()
 	while(!xQueueReceive(serial_rx_queue, &msg, portMAX_DELAY));
 	return msg;
 }
+
 void command_prompt(void *pvParameters)
 {
 	char buf[128];
 	char *argv[20];
     char hint[] = USER_NAME "@" USER_NAME "-STM32:~$ ";
 
-	fio_printf(1, "\rWelcome to FreeRTOS Shell\r\n");
+	//fio_printf(1, "\rWelcome to FreeRTOS Shell\r\n");
 	while(1){
-                fio_printf(1, "%s", hint);
+    	fio_printf(1, "%s", hint);
 		fio_read(0, buf, 127);
 	
 		int n=parse_command(buf, argv);
@@ -105,7 +119,6 @@ void command_prompt(void *pvParameters)
 		else
 			fio_printf(2, "\r\n\"%s\" command not found.\r\n", argv[0]);
 	}
-
 }
 
 void system_logger(void *pvParameters)
@@ -147,6 +160,85 @@ void system_logger(void *pvParameters)
     host_action(SYS_CLOSE, handle);
 }
 
+void auth_service(void *pvParameters)
+{
+	xAuthPkg auth_info;
+	portBASE_TYPE xStatus;
+	
+	while (1) {
+		if (uxQueueMessagesWaiting (xQueue) != 0) {
+		}
+		
+		xStatus = xQueueReceive (xAuthQueue, &auth_info, 1000);
+
+		if (xStatus == pdPASS) {
+			if (strcmp (auth_info.username, "root") == 0 &&
+					strcmp (auth_info.passwd, "root") == 0) {
+				fio_printf(1, "\n\r");
+				fio_printf(1, "===================\n\r");
+				fio_printf(1, "=   Welcome back  =\n\r");
+				fio_printf(1, "===================\n\r");
+				fio_printf(1, "\n\r");
+				vTaskSuspend (login_handle);
+				vTaskResume (cmd_handle);
+			} else {
+				fio_printf(1, "\n\rTry again\n\r");	
+			}
+		} else {
+			fio_printf (1, "\n\rCould not receive from the queue.\n\r");
+		}
+
+		vTaskDelete (auth_service_handle);
+	}
+}
+
+void auth_client(void *pvParameters)
+{
+	portBASE_TYPE xStatus;
+
+	while (1) {
+		xStatus = xQueueSendToBack (xAuthQueue, pvParameters, 0);
+		
+		if (xStatus != pdPASS) {
+			fio_printf (2, "\n\rError\n\r");
+		}
+
+		vTaskDelete (auth_client_handle);
+	}
+}
+
+void login(void *pvParameters)
+{
+	fio_printf(1, "\n\r| ================================ |\r\n");
+	fio_printf(1, "\n\r| ----- Welcome to FreeRTOS ------ |\r\n");
+	fio_printf(1, "\n\r| ================================ |\r\n");
+	
+	while (1) {
+		char ipt_uname[32];
+		char ipt_passwd[32];
+		xAuthPkg auth_info;
+
+		fio_printf(1, "\n\rLogin: ");
+		fio_read(0, ipt_uname, 32);
+		fio_printf(1, "\n\rPassword: ");
+		fio_passwd(7, ipt_passwd, 32);	
+		fio_printf(1, "\n\r");
+
+		auth_info.username = ipt_uname;
+		auth_info.passwd = ipt_passwd;
+
+		xAuthQueue = xQueueCreate (5, sizeof (xAuthPkg));
+
+		xTaskCreate(auth_client, 
+					(signed portCHAR *)"auth_client", 
+					128, (void*) &auth_info, tskIDLE_PRIORITY + 4, &auth_client_handle);
+
+		xTaskCreate(auth_service, 
+					(signed portCHAR *)"auth_service",
+					128, NULL, tskIDLE_PRIORITY + 5, &auth_service_handle);
+	}
+}
+
 int main()
 {
 	init_rs232();
@@ -166,10 +258,17 @@ int main()
 	serial_rx_queue = xQueueCreate(1, sizeof(char));
 
     register_devfs();
+
+	xTaskCreate(login, 
+				(signed portCHAR *) "login", 
+				1024, NULL, tskIDLE_PRIORITY + 3, &login_handle);
+
 	/* Create a task to output text read from romfs. */
 	xTaskCreate(command_prompt,
 	            (signed portCHAR *) "CLI",
-	            512 /* stack size */, NULL, tskIDLE_PRIORITY + 2, NULL);
+	            512 /* stack size */, NULL, tskIDLE_PRIORITY + 2, &cmd_handle);
+	
+	vTaskSuspend(cmd_handle);
 
 #if 0
 	/* Create a task to record system log. */
