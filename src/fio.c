@@ -69,6 +69,48 @@ static ssize_t stdout_write(void * opaque, const void * buf, size_t count) {
     return count;
 }
 
+static ssize_t stdin_passwd(void * opaque, void * buf, size_t count) {
+    int i=0, endofline=0, last_chr_is_esc;
+    char *ptrbuf=buf;
+    char ch;
+    while(i < count&&endofline!=1){
+	ptrbuf[i]=recv_byte();
+	switch(ptrbuf[i]){
+		case '\r':
+		case '\n':
+			ptrbuf[i]='\0';
+			endofline=1;
+			break;
+		case '[':
+			if(last_chr_is_esc){
+				last_chr_is_esc=0;
+				ch=recv_byte();
+				if(ch>=1&&ch<=6){
+					ch=recv_byte();
+				}
+				continue;
+			}
+		case ESC:
+			last_chr_is_esc=1;
+			continue;
+		case BACKSPACE:
+			last_chr_is_esc=0;
+			if(i>0){
+				send_byte('\b');
+				send_byte(' ');
+				send_byte('\b');
+				--i;
+			}
+			continue;
+		default:
+			last_chr_is_esc=0;
+	}
+	++i;
+    }
+    return i;
+}
+
+
 static xSemaphoreHandle fio_sem = NULL;
 
 __attribute__((constructor)) void fio_init() {
@@ -76,6 +118,7 @@ __attribute__((constructor)) void fio_init() {
     fio_fds[0].fdread = stdin_read;
     fio_fds[1].fdwrite = stdout_write;
     fio_fds[2].fdwrite = stdout_write;
+	fio_fds[7].fdpasswd = stdin_passwd;
     fio_sem = xSemaphoreCreateMutex();
 }
 
@@ -92,7 +135,8 @@ static int fio_is_open_int(int fd) {
               (fio_fds[fd].fdwrite == NULL) &&
               (fio_fds[fd].fdseek == NULL) &&
               (fio_fds[fd].fdclose == NULL) &&
-              (fio_fds[fd].opaque == NULL));
+              (fio_fds[fd].opaque == NULL) && 
+			  (fio_fds[fd].fdpasswd == NULL));
     return r;
 }
 
@@ -161,6 +205,21 @@ ssize_t fio_write(int fd, const void * buf, size_t count) {
         r = -2;
     }
     return r;
+}
+
+ssize_t fio_passwd(int fd, void * buf, size_t count) {
+    ssize_t r = 0;
+	if (fio_is_open_int(fd)) {
+		if (fio_fds[fd].fdpasswd) {
+    		r = fio_fds[fd].fdpasswd(fio_fds[fd].opaque, buf, count);
+		} else {
+			r = -3;
+		}
+	} else {
+		r = -2;
+	}
+
+	return r;
 }
 
 off_t fio_seek(int fd, off_t offset, int whence) {
