@@ -110,14 +110,19 @@ void command_prompt(void *pvParameters)
     	fio_printf(1, "%s", hint);
 		fio_read(0, buf, 127);
 	
-		int n=parse_command(buf, argv);
+		if (strcmp (buf, "logout") == 0) {
+			host_action(SYS_SYSTEM, "echo bye\0");
+			host_action(SYS_SYSTEM, "pkill qemu");
+		} else {
+			int n=parse_command(buf, argv);
 
-		/* will return pointer to the command function */
-		cmdfunc *fptr=do_command(argv[0]);
-		if(fptr!=NULL)
-			fptr(n, argv);
-		else
-			fio_printf(2, "\r\n\"%s\" command not found.\r\n", argv[0]);
+			/* will return pointer to the command function */
+			cmdfunc *fptr=do_command(argv[0]);
+			if(fptr!=NULL)
+				fptr(n, argv);
+			else
+				fio_printf(2, "\r\n\"%s\" command not found.\r\n", argv[0]);
+		}
 	}
 }
 
