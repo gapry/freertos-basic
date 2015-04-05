@@ -28,6 +28,10 @@ volatile xSemaphoreHandle serial_tx_wait_sem = NULL;
 /* Add for serial input */
 volatile xQueueHandle serial_rx_queue = NULL;
 
+/* 10 (s) */
+static const portTickType history_session = 10000 / portTICK_RATE_MS;
+static const portTickType write_delay = 50 / portTICK_RATE_MS;
+
 typedef struct{
 	char* username;
 	char* passwd;
@@ -286,6 +290,56 @@ int main()
 	vTaskStartScheduler();
 
 	return 0;
+}
+
+void vApplicationIdleHook()
+{
+	if(xTaskGetTickCount() % history_session == 0) {
+		//host_action(SYS_SYSTEM, "cd ./data/test-romfs/syslog");
+		//host_action(SYS_SYSTEM, "echo test >> `date +\"%d-%m-%Y,%H:%M\"`.txt");
+	
+		int fd_open, fd_write;
+		signed char buf[128];
+		
+		fd_open = host_action (SYS_OPEN, "./data/test-romfs/syslog/tasklog.txt", 4);
+		if (fd_open == -1) {
+			host_action (SYS_SYSTEM, "echo can_not_open_file");
+
+			return;
+		}
+		
+		/*
+		 * Q: It doesn't work.
+		 */
+		host_action(SYS_SYSTEM, "echo `date >> ./data/test-romfs/syslog/tasklog.txt`");
+
+		vTaskList(buf);
+		fd_write = host_action (SYS_WRITE, fd_open, (void*) buf, strlen((char *)buf));
+		if (fd_write != 0) {
+			host_action (SYS_SYSTEM, "echo can_not_write_file");
+
+			return;
+		}
+
+		host_action (SYS_CLOSE, fd_open);
+		host_action(SYS_SYSTEM, "echo task_state_logged.\0");
+		/*
+		 * Q1: Why does it need a delay?
+		 *
+		 * vTaskSuspendAll();
+		 * {
+		 *	  host_action (...);
+		 * }
+		 * xTaskResumeAll();
+		 *
+		 * The method doesn't work at this moment.
+		 *
+		 * Q2: It must not call vTaskDelay in Idle Task. How to explain it in deeply? 
+  		 */
+
+		/* Pooling */
+		for(int i = 0; i < 1000000000; ++i);
+	}
 }
 
 void vApplicationTickHook()
